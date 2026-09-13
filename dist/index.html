@@ -33,6 +33,7 @@
         <h2 id="missionTitle">A ponte improvisada</h2>
         <p id="missionText">Leve a bolinha até a caixa de entrega sem deixá-la cair no vão.</p>
       </div>
+      <button id="helpButton" class="mission-help" aria-label="Ver objetivo e dica da fase">?</button>
       <div class="budget" aria-label="Orçamento da fase">
         <span>ORÇAMENTO</span>
         <strong id="budgetValue">$ 100</strong>
@@ -47,17 +48,10 @@
             <span class="bench-chip"><i></i><span id="benchLabel">BANCADA 01</span></span>
             <span id="runChip" class="run-chip" hidden><i></i><span>TESTE</span><b id="runTimeValue">0.0 s</b></span>
           </div>
-          <button id="fullscreenButton" class="fullscreen-button" aria-label="Abrir tabuleiro em tela cheia" title="Tela cheia">⛶</button>
+          <button id="fullscreenButton" class="fullscreen-button" aria-label="Ampliar jogo com controles" title="Ampliar jogo">⛶</button>
         </div>
-        <p id="canvasHelp" class="visually-hidden">Escolha uma peça. Use o toque ou mouse para posicionar; no teclado, use 1 a 4 para escolher, as setas para mover e Enter para instalar. Pressione R para girar, Delete para remover e Escape para cancelar.</p>
+        <p id="canvasHelp" class="visually-hidden">Escolha uma peça e toque ou arraste para instalar. Toque numa peça instalada para ajustar com as setas e girar em passos de 15 graus. No teclado: 1 a 4 escolhe, setas movem, Enter instala, R gira, Shift R gira ao contrário, Delete remove e Escape cancela.</p>
         <div id="hint" class="canvas-hint">Escolha uma peça e toque onde quer instalar</div>
-        <div id="resultCard" class="result-card" hidden>
-          <span class="result-kicker">PROJETO APROVADO</span>
-          <div class="result-stars" id="resultStars">★★★</div>
-          <h3 id="resultTitle">Entrega concluída!</h3>
-          <p id="resultText">A gambiarra funcionou. Ciência confirmada.</p>
-          <button id="nextLevelButton" class="primary-button">Próxima fase</button>
-        </div>
       </div>
 
       <aside class="parts-panel" aria-label="Peças disponíveis">
@@ -87,9 +81,17 @@
             <span class="part-meta"><b id="count-magnet">0</b><em>$ 40</em></span>
           </button>
         </div>
+        <div class="selection-info" id="selectionInfo">Escolha uma peça</div>
+        <div class="fine-move" aria-label="Ajustar posição da peça">
+          <button class="tool-button" data-move="left" disabled aria-label="Mover peça para a esquerda">←</button>
+          <button class="tool-button" data-move="up" disabled aria-label="Mover peça para cima">↑</button>
+          <button class="tool-button" data-move="down" disabled aria-label="Mover peça para baixo">↓</button>
+          <button class="tool-button" data-move="right" disabled aria-label="Mover peça para a direita">→</button>
+        </div>
         <div class="edit-tools">
-          <button id="rotateButton" class="tool-button" disabled aria-label="Girar peça selecionada">↻ <span>Girar</span></button>
-          <button id="deleteButton" class="tool-button danger" disabled aria-label="Remover peça selecionada">× <span>Remover</span></button>
+          <button id="rotateBackButton" class="tool-button" disabled aria-label="Girar peça 15 graus no sentido anti-horário">↶ <span>15°</span></button>
+          <button id="rotateButton" class="tool-button" disabled aria-label="Girar peça 15 graus no sentido horário">↷ <span>15°</span></button>
+          <button id="deleteButton" class="tool-button danger" disabled aria-label="Remover peça selecionada e devolver seu custo" title="Remover peça e devolver seu custo">× <span>Tirar</span></button>
         </div>
       </aside>
     </section>
@@ -104,8 +106,13 @@
         <button id="playButton" class="primary-button"><span id="playIcon">▶</span> <span id="playLabel">Testar invenção</span></button>
       </div>
     </footer>
-  </main>
-
+    <div id="resultCard" class="result-card" role="status" aria-labelledby="resultTitle" hidden>
+      <span class="result-kicker">PROJETO APROVADO</span>
+      <div class="result-stars" id="resultStars">★★★</div>
+      <h3 id="resultTitle">Entrega concluída!</h3>
+      <p id="resultText">A gambiarra funcionou. Ciência confirmada.</p>
+      <button id="nextLevelButton" class="primary-button">Próxima fase</button>
+    </div>
   <dialog id="levelDialog" class="level-dialog">
     <div class="dialog-head">
       <div><span class="eyebrow">CADERNO DE PROJETOS</span><h2>Escolha uma fase</h2></div>
@@ -113,6 +120,20 @@
     </div>
     <div id="levelList" class="level-list"></div>
   </dialog>
+
+  <dialog id="helpDialog" class="level-dialog help-dialog" aria-labelledby="helpTitle">
+    <div class="dialog-head">
+      <h2 id="helpTitle">Objetivo da fase</h2>
+      <button id="closeHelp" class="icon-button" aria-label="Fechar ajuda">×</button>
+    </div>
+    <p id="helpText"></p>
+    <p class="help-tip" id="helpHint"></p>
+    <p>Escolha uma peça, toque na bancada e arraste para posicionar. As setas ajustam a posição; ↶ e ↷ giram 15°.</p>
+    <p>Toque novamente no cartão da peça para cancelar a ferramenta e selecionar uma peça instalada. × retira a peça e devolve seu custo.</p>
+    <p id="helpPar"></p>
+    <p class="mobile-tip">Vire o celular de lado e use ⛶ para ampliar a bancada com os controles.</p>
+  </dialog>
+  </main>
 
   <script src="game.js"></script>
 </body>

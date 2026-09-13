@@ -5,6 +5,8 @@
   const ctx = canvas.getContext("2d");
   const W = canvas.width;
   const H = canvas.height;
+  const physicsStep = 1 / 180;
+  const reducedMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
   const costs = { plank: 25, spring: 30, fan: 35, magnet: 40 };
   const labels = { plank: "Tábua", spring: "Mola", fan: "Ventilador", magnet: "Ímã" };
   const progressKey = "beakman-progress";
@@ -78,6 +80,9 @@
     playLabel: document.getElementById("playLabel"),
     resetButton: document.getElementById("resetButton"),
     rotateButton: document.getElementById("rotateButton"),
+    rotateBackButton: document.getElementById("rotateBackButton"),
+    selectionInfo: document.getElementById("selectionInfo"),
+    gameShell: document.querySelector(".game-shell"),
     deleteButton: document.getElementById("deleteButton"),
     canvasWrap: document.getElementById("canvasWrap"),
     fullscreenButton: document.getElementById("fullscreenButton"),
@@ -92,7 +97,14 @@
     levelButton: document.getElementById("levelButton"),
     levelDialog: document.getElementById("levelDialog"),
     closeDialog: document.getElementById("closeDialog"),
-    levelList: document.getElementById("levelList")
+    levelList: document.getElementById("levelList"),
+    helpButton: document.getElementById("helpButton"),
+    helpDialog: document.getElementById("helpDialog"),
+    helpTitle: document.getElementById("helpTitle"),
+    helpText: document.getElementById("helpText"),
+    helpHint: document.getElementById("helpHint"),
+    helpPar: document.getElementById("helpPar"),
+    closeHelp: document.getElementById("closeHelp")
   };
 
   let currentLevel = 0;
@@ -102,6 +114,9 @@
   let selectedTool = null;
   let selectedId = null;
   let draggingId = null;
+  let activePointerId = null;
+  let accumulator = 0;
+  let expanded = false;
   let dragOffset = { x: 0, y: 0 };
   let mode = "build";
   let ball = null;
@@ -151,6 +166,7 @@
   function tone(freq, duration = 0.08, type = "square", gain = 0.035) {
     try {
       audioCtx ||= new (window.AudioContext || window.webkitAudioContext)();
+      if (audioCtx.state === "suspended") audioCtx.resume().catch(() => {});
       const osc = audioCtx.createOscillator();
       const volume = audioCtx.createGain();
       osc.type = type; osc.frequency.value = freq;
@@ -162,6 +178,7 @@
   }
 
   function loadLevel(index) {
+    releaseDrag();
     currentLevel = Math.max(0, Math.min(levels.length - 1, index));
     const level = levels[currentLevel];
     inventory = { ...level.inventory };
@@ -174,11 +191,16 @@
     mode = "build";
     ball = makeBall();
     runTime = 0;
+    accumulator = 0;
     els.resultCard.hidden = true;
     els.levelNumber.textContent = String(currentLevel + 1).padStart(2, "0");
     els.benchLabel.textContent = `BANCADA ${String(currentLevel + 1).padStart(2, "0")}`;
     els.missionTitle.textContent = level.title;
     els.missionText.textContent = level.text;
+    els.helpTitle.textContent = level.title;
+    els.helpText.textContent = level.text;
+    els.helpHint.textContent = `Dica: ${level.hint}`;
+    els.helpPar.textContent = `Ganhe 3 estrelas usando ${level.par} peças ou menos. Remover uma peça devolve seu custo.`;
     els.hint.textContent = level.hint;
     updateUI();
     renderLevelList();
@@ -191,6 +213,8 @@
 
   function usedCount() { return placed.length; }
 
+  function canEdit() { return mode === "build" || mode === "failed"; }
+
   function isUnlocked(index) {
     return index === 0 || progress.stars.slice(0, index).every(value => value > 0);
   }
@@ -201,11 +225,14 @@
       const button = document.querySelector(`[data-tool="${type}"]`);
       count.textContent = inventory[type] ?? 0;
       button.classList.toggle("selected", selectedTool === type);
-      button.disabled = mode === "running" || mode === "won" || (inventory[type] ?? 0) <= 0 || budget < costs[type];
+      button.disabled = !canEdit() || (inventory[type] ?? 0) <= 0 || budget < costs[type];
     });
     const selected = placed.find(item => item.id === selectedId);
-    els.rotateButton.disabled = mode === "running" || !selected || selected.type === "magnet";
-    els.deleteButton.disabled = mode === "running" || !selected;
+    els.rotateButton.disabled = !canEdit() || !selected || selected.type === "magnet";
+    els.rotateBackButton.disabled = els.rotateButton.disabled;
+    els.deleteButton.disabled = !canEdit() || !selected;
+    document.querySelectorAll("[data-move]").forEach(button => { button.disabled = !canEdit() || !selected; });
+    updateSelectionInfo();
     els.budgetValue.textContent = `$ ${budget}`;
     const total = progress.stars.reduce((a, b) => a + b, 0);
     els.totalStars.textContent = `★ ${total}/${levels.length * 3}`;
@@ -213,6 +240,7 @@
     const states = {
       build: ["MODO CONSTRUÇÃO", "▶", "Testar invenção"],
       running: ["TESTE EM ANDAMENTO", "■", "Parar teste"],
+      paused: ["TESTE PAUSADO", "▶", "Retomar teste"],
       failed: ["PROJETO FALHOU", "↻", "Tentar de novo"],
       won: ["PROJETO APROVADO", "✓", "Concluído"]
     };
@@ -226,8 +254,8 @@
     els.playButton.disabled = mode === "won";
     els.playButton.classList.toggle("running", mode === "running");
     els.canvasWrap.classList.toggle("running", mode === "running");
-    canvas.classList.toggle("placing", Boolean(selectedTool) && mode !== "running");
-    els.runChip.hidden = mode !== "running";
+    canvas.classList.toggle("placing", Boolean(selectedTool) && canEdit());
+    els.runChip.hidden = mode !== "running" && mode !== "paused";
     els.runTimeValue.textContent = `${runTime.toFixed(1)} s`;
     els.hint.style.opacity = mode === "running" ? "0" : "1";
     document.querySelectorAll(".part-card").forEach(button => {
@@ -249,11 +277,14 @@
   }
 
   function startTest() {
+    releaseDrag();
     ball = makeBall();
     runTime = 0;
     particles = [];
     ballTrail = [];
     trailClock = 0;
+    accumulator = 0;
+    lastFrame = performance.now();
     selectedId = null;
     selectedTool = null;
     mode = "running";
@@ -263,10 +294,12 @@
   }
 
   function stopTest(failed = false) {
+    releaseDrag();
     mode = failed ? "failed" : "build";
     ball = makeBall();
     ballTrail = [];
     runTime = 0;
+    accumulator = 0;
     updateUI();
   }
 
@@ -284,6 +317,7 @@
       : `Funcionou em ${runTime.toFixed(1)} s com ${usedCount()} peças. Tente usar ${par} ou menos para ganhar 3 estrelas.`;
     els.nextLevelButton.textContent = currentLevel < levels.length - 1 ? "Próxima fase" : "Jogar novamente";
     els.resultCard.hidden = false;
+    els.nextLevelButton.focus();
     screenShake = 10;
     for (let i = 0; i < 44; i++) particles.push({
       x: levels[currentLevel].goal.x, y: levels[currentLevel].goal.y,
@@ -298,7 +332,7 @@
   }
 
   function placePart(type, x, y) {
-    if ((inventory[type] ?? 0) <= 0 || budget < costs[type]) return;
+    if (!canEdit() || (inventory[type] ?? 0) <= 0 || budget < costs[type]) return;
     const defaults = { plank: 0, spring: 0, fan: -Math.PI / 2, magnet: 0 };
     const item = { id: nextId++, type, x: clamp(x, 45, W - 45), y: clamp(y, 45, H - 45), angle: defaults[type], born: performance.now() };
     placed.push(item);
@@ -313,9 +347,11 @@
     if (inventory[type] <= 0 || budget < costs[type]) selectedTool = null;
     tone(type === "spring" ? 520 : 220, .06, "square", .025);
     updateUI();
+    return item;
   }
 
   function deleteSelected() {
+    if (!canEdit()) return;
     const index = placed.findIndex(item => item.id === selectedId);
     if (index < 0) return;
     const [item] = placed.splice(index, 1);
@@ -330,6 +366,22 @@
   function canvasPoint(event) {
     const rect = canvas.getBoundingClientRect();
     return { x: (event.clientX - rect.left) * W / rect.width, y: (event.clientY - rect.top) * H / rect.height };
+  }
+
+  function updateSelectionInfo() {
+    const item = placed.find(part => part.id === selectedId);
+    const angle = item ? Math.round(item.angle * 180 / Math.PI) : 0;
+    els.selectionInfo.textContent = item
+      ? `${labels[item.type]}${item.type === "magnet" ? "" : ` · ${angle}°`}`
+      : selectedTool ? `${labels[selectedTool]}: toque e arraste` : "Toque numa peça para ajustar";
+  }
+
+  function moveSelected(dx, dy) {
+    if (!canEdit()) return;
+    const item = placed.find(part => part.id === selectedId);
+    if (!item) return;
+    item.x = clamp(item.x + dx, 35, W - 35);
+    item.y = clamp(item.y + dy, 35, H - 35);
   }
 
   function distanceToSegment(px, py, x1, y1, x2, y2) {
@@ -348,31 +400,38 @@
     return [item.x - dx, item.y - dy, item.x + dx, item.y + dy];
   }
 
-  function hitPart(item, point) {
+  function hitPart(item, point, touch = false) {
+    const rect = canvas.getBoundingClientRect();
+    const radius = touch ? 22 * W / rect.width : 28;
     if (item.type === "plank" || item.type === "spring") {
       const s = segmentFor(item);
-      return distanceToSegment(point.x, point.y, ...s).distance < 28;
+      return distanceToSegment(point.x, point.y, ...s).distance < Math.max(28, radius);
     }
-    return Math.hypot(point.x - item.x, point.y - item.y) < 42;
+    return Math.hypot(point.x - item.x, point.y - item.y) < Math.max(42, radius);
   }
 
   canvas.addEventListener("pointerdown", event => {
-    if (mode === "running" || mode === "won") return;
+    if (!canEdit() || activePointerId !== null || event.button > 0 || event.isPrimary === false) return;
     event.preventDefault();
     canvas.setPointerCapture(event.pointerId);
+    activePointerId = event.pointerId;
     const point = canvasPoint(event);
     pointerCursor = point;
     pointerInside = true;
-    const hit = [...placed].reverse().find(item => hitPart(item, point));
-    if (hit) {
+    const hit = [...placed].reverse().find(item => hitPart(item, point, event.pointerType === "touch"));
+    if (selectedTool) {
+      const item = placePart(selectedTool, point.x, point.y);
+      if (item) {
+        draggingId = item.id;
+        dragOffset = { x: item.x - point.x, y: item.y - point.y };
+      }
+    } else if (hit) {
       selectedId = hit.id;
       selectedTool = null;
       draggingId = hit.id;
       dragOffset = { x: hit.x - point.x, y: hit.y - point.y };
       updateUI();
       els.hint.textContent = "Peça selecionada — arraste, gire ou remova.";
-    } else if (selectedTool) {
-      placePart(selectedTool, point.x, point.y);
     } else {
       selectedId = null;
       updateUI();
@@ -380,10 +439,11 @@
   });
 
   canvas.addEventListener("pointermove", event => {
+    if (activePointerId !== null && event.pointerId !== activePointerId) return;
     const point = canvasPoint(event);
     pointerCursor = point;
     pointerInside = true;
-    if (!draggingId || mode === "running") return;
+    if (!draggingId || !canEdit()) return;
     event.preventDefault();
     const item = placed.find(part => part.id === draggingId);
     if (item) {
@@ -391,30 +451,36 @@
       item.y = clamp(point.y + dragOffset.y, 35, H - 35);
     }
   });
-  const releaseDrag = () => { draggingId = null; };
+  function releaseDrag(event) {
+    if (event && event.pointerId !== activePointerId) return;
+    const pointerId = activePointerId;
+    draggingId = null;
+    activePointerId = null;
+    if (pointerId !== null && canvas.hasPointerCapture?.(pointerId)) canvas.releasePointerCapture(pointerId);
+    if (event?.pointerType === "touch") pointerInside = false;
+  }
   canvas.addEventListener("pointerup", releaseDrag);
   canvas.addEventListener("pointercancel", releaseDrag);
+  canvas.addEventListener("lostpointercapture", releaseDrag);
   canvas.addEventListener("pointerenter", () => { pointerInside = true; });
   canvas.addEventListener("pointerleave", () => { if (!draggingId) pointerInside = false; });
 
   canvas.addEventListener("keydown", event => {
-    if (mode === "running" || mode === "won") return;
+    if (!canEdit()) return;
     const directions = { ArrowLeft: [-16, 0], ArrowRight: [16, 0], ArrowUp: [0, -16], ArrowDown: [0, 16] };
     if (directions[event.key]) {
       event.preventDefault();
       const [dx, dy] = directions[event.key];
       const selected = placed.find(part => part.id === selectedId);
-      if (selected) {
-        selected.x = clamp(selected.x + dx, 35, W - 35);
-        selected.y = clamp(selected.y + dy, 35, H - 35);
-      } else {
+      if (selected) moveSelected(dx, dy);
+      else {
         keyboardCursor.x = clamp(keyboardCursor.x + dx, 35, W - 35);
         keyboardCursor.y = clamp(keyboardCursor.y + dy, 35, H - 35);
       }
     } else if (event.key === "Enter" && selectedTool) {
       event.preventDefault(); placePart(selectedTool, keyboardCursor.x, keyboardCursor.y);
     } else if ((event.key === "r" || event.key === "R") && selectedId) {
-      event.preventDefault(); els.rotateButton.click();
+      event.preventDefault(); (event.shiftKey ? els.rotateBackButton : els.rotateButton).click();
     } else if ((event.key === "Delete" || event.key === "Backspace") && selectedId) {
       event.preventDefault(); deleteSelected();
     } else if (/^[1-4]$/.test(event.key)) {
@@ -428,6 +494,7 @@
 
   document.querySelectorAll(".part-card").forEach(button => {
     button.addEventListener("click", () => {
+      if (!canEdit()) return;
       const type = button.dataset.tool;
       selectedTool = selectedTool === type ? null : type;
       selectedId = null;
@@ -439,32 +506,70 @@
     });
   });
 
-  els.rotateButton.addEventListener("click", () => {
+  function rotateSelected(direction) {
+    if (!canEdit()) return;
     const item = placed.find(part => part.id === selectedId);
-    if (!item) return;
-    item.angle = (item.angle + Math.PI / 12) % (Math.PI * 2);
+    if (!item || item.type === "magnet") return;
+    item.angle = Math.atan2(Math.sin(item.angle + direction * Math.PI / 12), Math.cos(item.angle + direction * Math.PI / 12));
+    updateSelectionInfo();
     tone(360, .04, "square", .018);
+  }
+  els.rotateButton.addEventListener("click", () => rotateSelected(1));
+  els.rotateBackButton.addEventListener("click", () => rotateSelected(-1));
+  document.querySelectorAll("[data-move]").forEach(button => {
+    const directions = { left: [-4, 0], up: [0, -4], down: [0, 4], right: [4, 0] };
+    button.addEventListener("click", () => moveSelected(...directions[button.dataset.move]));
   });
   els.deleteButton.addEventListener("click", deleteSelected);
   els.playButton.addEventListener("click", () => {
     if (mode === "running") stopTest(false);
+    else if (mode === "paused") {
+      mode = "running";
+      lastFrame = performance.now();
+      accumulator = 0;
+      tone(440, .06, "triangle", .02);
+      updateUI();
+    }
     else if (mode === "build" || mode === "failed") startTest();
   });
   els.resetButton.addEventListener("click", () => loadLevel(currentLevel));
-  els.levelButton.addEventListener("click", () => { renderLevelList(); els.levelDialog.showModal(); });
+  function pauseTest() {
+    releaseDrag();
+    if (mode !== "running") return;
+    mode = "paused";
+    accumulator = 0;
+    updateUI();
+    els.hint.textContent = "Teste pausado. Toque em Retomar teste para continuar.";
+  }
+  document.addEventListener("visibilitychange", () => { if (document.hidden) pauseTest(); });
+  window.addEventListener("blur", pauseTest);
+  els.levelButton.addEventListener("click", () => { pauseTest(); renderLevelList(); els.levelDialog.showModal(); });
   els.closeDialog.addEventListener("click", () => els.levelDialog.close());
   els.levelDialog.addEventListener("click", event => { if (event.target === els.levelDialog) els.levelDialog.close(); });
+  els.helpButton.addEventListener("click", () => { pauseTest(); els.helpDialog.showModal(); });
+  els.closeHelp.addEventListener("click", () => els.helpDialog.close());
+  function setExpanded(active) {
+    expanded = active;
+    els.gameShell.classList.toggle("expanded", active);
+    document.body.classList.toggle("game-expanded", active);
+    els.fullscreenButton.textContent = active ? "×" : "⛶";
+    els.fullscreenButton.setAttribute("aria-label", active ? "Sair do jogo ampliado" : "Ampliar jogo com controles");
+    els.fullscreenButton.setAttribute("aria-pressed", String(active));
+    releaseDrag();
+  }
   els.fullscreenButton.addEventListener("click", async () => {
+    const active = !expanded;
+    setExpanded(active);
     try {
-      if (document.fullscreenElement) await document.exitFullscreen();
-      else if (els.canvasWrap.requestFullscreen) await els.canvasWrap.requestFullscreen();
-      else if (els.canvasWrap.webkitRequestFullscreen) els.canvasWrap.webkitRequestFullscreen();
-    } catch (_) { /* fullscreen support varies by browser */ }
+      if (!active && document.fullscreenElement) await document.exitFullscreen();
+      else if (active && els.gameShell.requestFullscreen) await els.gameShell.requestFullscreen();
+    } catch (_) { /* CSS enlargement also works without the fullscreen API, including iOS. */ }
   });
   document.addEventListener("fullscreenchange", () => {
-    const active = Boolean(document.fullscreenElement);
-    els.fullscreenButton.textContent = active ? "×" : "⛶";
-    els.fullscreenButton.setAttribute("aria-label", active ? "Sair da tela cheia" : "Abrir tabuleiro em tela cheia");
+    if (!document.fullscreenElement) setExpanded(false);
+  });
+  document.addEventListener("keydown", event => {
+    if (event.key === "Escape" && expanded && !els.levelDialog.open && !els.helpDialog.open) setExpanded(false);
   });
   els.nextLevelButton.addEventListener("click", () => {
     const next = currentLevel < levels.length - 1 ? currentLevel + 1 : 0;
@@ -527,11 +632,13 @@
     if (ball.x > W - ball.r) { ball.x = W - ball.r; ball.vx = -Math.abs(ball.vx) * .5; }
 
     const goal = level.goal;
-    if (Math.hypot(ball.x - goal.x, ball.y - goal.y) < 31) winLevel();
+    if (Math.hypot(ball.x - goal.x, ball.y - goal.y) < 31) { winLevel(); return; }
     if (ball.y > H + 70 || runTime > 30) {
+      const fell = ball.y > H + 70;
       tone(110, .2, "sawtooth", .025);
       stopTest(true);
-      els.hint.textContent = ball.y > H ? "A carga caiu. Ajuste as peças e tente de novo." : "O tempo acabou. Reposicione a invenção.";
+      els.hint.textContent = fell ? "A carga caiu. Ajuste as peças e tente de novo." : "O tempo acabou. Reposicione a invenção.";
+      els.statusText.textContent = fell ? "A CARGA CAIU" : "TEMPO ESGOTADO";
     }
   }
 
@@ -575,7 +682,8 @@
       ball.vy -= (1 + bounce) * normalVelocity * ny;
       const tx = -ny, ty = nx;
       const tangent = ball.vx * tx + ball.vy * ty;
-      const friction = spring ? .02 : .08;
+      // Preserve rolling momentum; heavy per-contact friction stopped the ball on level 1.
+      const friction = .0002;
       ball.vx -= tangent * tx * friction;
       ball.vy -= tangent * ty * friction;
       if (spring && ball.springLock <= 0) {
@@ -602,12 +710,12 @@
 
   function draw() {
     ctx.save();
-    if (screenShake > .05) ctx.translate((Math.random() - .5) * screenShake, (Math.random() - .5) * screenShake);
+    if (!reducedMotion && screenShake > .05) ctx.translate((Math.random() - .5) * screenShake, (Math.random() - .5) * screenShake);
     drawBackground();
     drawLevel();
     drawBallTrail();
     placed.forEach(drawPart);
-    if (selectedTool && mode !== "running" && pointerInside) drawPlacementPreview();
+    if (selectedTool && canEdit() && pointerInside && !draggingId) drawPlacementPreview();
     drawGoal(levels[currentLevel].goal);
     drawBall();
     drawParticles();
@@ -887,11 +995,14 @@
   }
 
   function loop(now) {
-    const dt = Math.min((now - lastFrame) / 1000, .032);
+    const dt = Math.max(0, Math.min((now - lastFrame) / 1000, .1));
     lastFrame = now;
     if (mode === "running") {
-      const steps = 3;
-      for (let i = 0; i < steps; i++) updatePhysics(dt / steps);
+      accumulator += dt;
+      while (accumulator + 1e-9 >= physicsStep && mode === "running") {
+        accumulator -= physicsStep;
+        updatePhysics(physicsStep);
+      }
       els.runTimeValue.textContent = `${runTime.toFixed(1)} s`;
     }
     updateParticles(dt);
