@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0b1628">
+  <meta name="description" content="Beakman: construa invenções e resolva desafios de física com tábuas, molas, ventiladores e ímãs.">
+  <title>Beakman</title>
+  <link rel="preload" href="workshop-bg.webp" as="image" type="image/webp">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <main class="game-shell">
+    <header class="topbar">
+      <div class="brand" aria-label="Beakman">
+        <span class="brand-mark">B</span>
+        <div>
+          <h1>BEAKMAN</h1>
+          <p>Laboratório de invenções</p>
+        </div>
+      </div>
+      <div class="top-stats">
+        <button id="levelButton" class="level-chip" aria-label="Escolher fase">
+          <span>FASE</span><strong id="levelNumber">01</strong>
+        </button>
+        <div class="stars" id="totalStars" aria-label="Estrelas conquistadas">★ 0/9</div>
+      </div>
+    </header>
+
+    <section class="mission-panel" aria-labelledby="missionTitle">
+      <div class="mission-copy">
+        <span class="eyebrow">DESAFIO ATUAL</span>
+        <h2 id="missionTitle">A ponte improvisada</h2>
+        <p id="missionText">Leve a bolinha até a caixa de entrega sem deixá-la cair no vão.</p>
+      </div>
+      <div class="budget" aria-label="Orçamento da fase">
+        <span>ORÇAMENTO</span>
+        <strong id="budgetValue">$ 100</strong>
+      </div>
+    </section>
+
+    <section class="workbench">
+      <div class="canvas-wrap" id="canvasWrap">
+        <canvas id="gameCanvas" width="960" height="540" tabindex="0" aria-label="Área de construção da invenção" aria-describedby="canvasHelp"></canvas>
+        <div class="canvas-hud">
+          <div class="hud-group">
+            <span class="bench-chip"><i></i><span id="benchLabel">BANCADA 01</span></span>
+            <span id="runChip" class="run-chip" hidden><i></i><span>TESTE</span><b id="runTimeValue">0.0 s</b></span>
+          </div>
+          <button id="fullscreenButton" class="fullscreen-button" aria-label="Abrir tabuleiro em tela cheia" title="Tela cheia">⛶</button>
+        </div>
+        <p id="canvasHelp" class="visually-hidden">Escolha uma peça. Use o toque ou mouse para posicionar; no teclado, use 1 a 4 para escolher, as setas para mover e Enter para instalar. Pressione R para girar, Delete para remover e Escape para cancelar.</p>
+        <div id="hint" class="canvas-hint">Escolha uma peça e toque onde quer instalar</div>
+        <div id="resultCard" class="result-card" hidden>
+          <span class="result-kicker">PROJETO APROVADO</span>
+          <div class="result-stars" id="resultStars">★★★</div>
+          <h3 id="resultTitle">Entrega concluída!</h3>
+          <p id="resultText">A gambiarra funcionou. Ciência confirmada.</p>
+          <button id="nextLevelButton" class="primary-button">Próxima fase</button>
+        </div>
+      </div>
+
+      <aside class="parts-panel" aria-label="Peças disponíveis">
+        <div class="parts-heading">
+          <span>PEÇAS</span>
+          <small>Toque para selecionar</small>
+        </div>
+        <div class="parts-grid" id="partsGrid">
+          <button class="part-card" data-tool="plank" aria-label="Selecionar tábua">
+            <span class="part-icon plank-icon"></span>
+            <span class="part-name">Tábua</span>
+            <span class="part-meta"><b id="count-plank">2</b><em>$ 25</em></span>
+          </button>
+          <button class="part-card" data-tool="spring" aria-label="Selecionar mola">
+            <span class="part-icon spring-icon">〽</span>
+            <span class="part-name">Mola</span>
+            <span class="part-meta"><b id="count-spring">1</b><em>$ 30</em></span>
+          </button>
+          <button class="part-card" data-tool="fan" aria-label="Selecionar ventilador">
+            <span class="part-icon fan-icon">✣</span>
+            <span class="part-name">Ventilador</span>
+            <span class="part-meta"><b id="count-fan">0</b><em>$ 35</em></span>
+          </button>
+          <button class="part-card" data-tool="magnet" aria-label="Selecionar ímã">
+            <span class="part-icon magnet-icon">∩</span>
+            <span class="part-name">Ímã</span>
+            <span class="part-meta"><b id="count-magnet">0</b><em>$ 40</em></span>
+          </button>
+        </div>
+        <div class="edit-tools">
+          <button id="rotateButton" class="tool-button" disabled aria-label="Girar peça selecionada">↻ <span>Girar</span></button>
+          <button id="deleteButton" class="tool-button danger" disabled aria-label="Remover peça selecionada">× <span>Remover</span></button>
+        </div>
+      </aside>
+    </section>
+
+    <footer class="controls">
+      <div class="status-copy">
+        <span class="status-light" id="statusLight"></span>
+        <span id="statusText" aria-live="polite">MODO CONSTRUÇÃO</span>
+      </div>
+      <div class="control-actions">
+        <button id="resetButton" class="secondary-button">Recomeçar</button>
+        <button id="playButton" class="primary-button"><span id="playIcon">▶</span> <span id="playLabel">Testar invenção</span></button>
+      </div>
+    </footer>
+  </main>
+
+  <dialog id="levelDialog" class="level-dialog">
+    <div class="dialog-head">
+      <div><span class="eyebrow">CADERNO DE PROJETOS</span><h2>Escolha uma fase</h2></div>
+      <button id="closeDialog" class="icon-button" aria-label="Fechar">×</button>
+    </div>
+    <div id="levelList" class="level-list"></div>
+  </dialog>
+
+  <script src="game.js"></script>
+</body>
+</html>
