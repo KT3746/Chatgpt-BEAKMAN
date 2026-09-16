@@ -271,7 +271,7 @@
       button.className = `level-option${!unlocked ? " locked" : ""}${index === currentLevel ? " current" : ""}`;
       button.disabled = !unlocked;
       button.innerHTML = `<span class="level-index">${String(index + 1).padStart(2, "0")}</span><span><strong>${level.title}</strong><small>${unlocked ? level.text : "Conclua a fase anterior"}</small></span><span class="level-score">${unlocked ? "★".repeat(progress.stars[index]) + "☆".repeat(3 - progress.stars[index]) : "🔒"}</span>`;
-      button.addEventListener("click", () => { els.levelDialog.close(); loadLevel(index); });
+      button.addEventListener("click", () => { els.levelDialog.close(); loadLevel(index); canvas.focus(); });
       els.levelList.appendChild(button);
     });
   }
@@ -552,7 +552,7 @@
     expanded = active;
     els.gameShell.classList.toggle("expanded", active);
     document.body.classList.toggle("game-expanded", active);
-    els.fullscreenButton.textContent = active ? "×" : "⛶";
+    els.fullscreenButton.classList.toggle("active", active);
     els.fullscreenButton.setAttribute("aria-label", active ? "Sair do jogo ampliado" : "Ampliar jogo com controles");
     els.fullscreenButton.setAttribute("aria-pressed", String(active));
     releaseDrag();
@@ -574,6 +574,7 @@
   els.nextLevelButton.addEventListener("click", () => {
     const next = currentLevel < levels.length - 1 ? currentLevel + 1 : 0;
     loadLevel(next);
+    canvas.focus();
   });
 
   function clamp(value, min, max) { return Math.max(min, Math.min(max, value)); }

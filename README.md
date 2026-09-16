@@ -26,6 +26,8 @@ Jogo de desafios de física no navegador. O objetivo é construir soluções com
 
 Ao trocar de aplicativo ou abrir uma ajuda, o teste pausa sem perder a construção ou a trajetória. Toque em **Retomar teste** para continuar. **Parar teste** conserva as peças; **Recomeçar** limpa a bancada.
 
+Em telas de computador, a bancada e os controles se ajustam à altura disponível para que o botão de teste não fique abaixo da área visível.
+
 ## Verificação
 
 Execute `node tests/game-check.mjs`. O teste usa a física real do jogo para verificar soluções de três estrelas em todas as fases a 30, 60 e 120 quadros por segundo, devolução do orçamento e pausa/retomada.

@@ -7,6 +7,7 @@ const source = fs.readFileSync(new URL('../dist/game.js', import.meta.url), 'utf
 function game() {
   const elements = new Map();
   const documentListeners = new Map();
+  let focusedId = null;
   const element = id => {
     const handlers = new Map(), classes = new Set();
     return {
@@ -19,10 +20,13 @@ function game() {
       addEventListener(type, fn) { handlers.set(type, fn); },
       dispatch(type, fields = {}) { handlers.get(type)?.({ preventDefault() {}, target: this, ...fields }); },
       click() { if (!this.disabled) this.dispatch('click'); },
-      setAttribute() {}, appendChild(child) { this.children.push(child); },
+      attributes: new Map(),
+      setAttribute(name, value) { this.attributes.set(name, String(value)); },
+      getAttribute(name) { return this.attributes.get(name) ?? null; },
+      appendChild(child) { this.children.push(child); },
       showModal() { this.open = true; }, close() { this.open = false; },
       setPointerCapture() {}, releasePointerCapture() {}, hasPointerCapture() { return true; },
-      focus() {},
+      focus() { focusedId = id; },
     };
   };
   const get = id => {
@@ -70,7 +74,7 @@ function game() {
       select: id => { selectedId = id; selectedTool = null; updateUI(); },
     };
     loadLevel(0);`), sandbox);
-  return { ...sandbox.testGame, get, document,
+  return { ...sandbox.testGame, get, document, focusedId: () => focusedId,
     event: (type, fields = {}) => documentListeners.get(type)?.(fields),
     frame(dt) { clock += dt * 1000; raf(clock); },
   };
@@ -148,8 +152,11 @@ mobile.get('move-right').click();
 assert.equal(mobile.state().placed[1].x, 459);
 mobile.get('fullscreenButton').click();
 assert.ok(mobile.get('game-shell').classList.contains('expanded'), 'Enlargement must work without native fullscreen');
+assert.ok(mobile.get('fullscreenButton').classList.contains('active'));
+assert.equal(mobile.get('fullscreenButton').getAttribute('aria-pressed'), 'true');
 mobile.get('fullscreenButton').click();
 assert.ok(!mobile.get('game-shell').classList.contains('expanded'));
+assert.ok(!mobile.get('fullscreenButton').classList.contains('active'));
 mobile.startTest(); mobile.frame(.1);
 mobile.get('helpButton').click();
 assert.equal(mobile.state().mode, 'paused', 'Help must pause the active attempt');
@@ -162,3 +169,14 @@ for (let frame = 0; frame < 1800 && failure.state().mode === 'running'; frame++)
 assert.equal(failure.state().mode, 'failed');
 assert.equal(failure.get('hint').textContent, 'A carga caiu. Ajuste as peças e tente de novo.');
 console.log('Falling load reports the correct reason: OK');
+
+const flow = game(); flow.configure(0, solutions[0]); flow.startTest();
+for (let frame = 0; frame < 1800 && flow.state().mode === 'running'; frame++) flow.frame(1 / 60);
+assert.equal(flow.state().mode, 'won');
+assert.equal(flow.get('resultCard').hidden, false);
+assert.equal(flow.focusedId(), 'nextLevelButton', 'Victory must focus the next action');
+flow.get('nextLevelButton').click();
+assert.equal(flow.state().mode, 'build');
+assert.equal(flow.get('resultCard').hidden, true);
+assert.equal(flow.focusedId(), 'gameCanvas', 'The next level must return keyboard focus to the board');
+console.log('Victory, next level, and keyboard focus: OK');
