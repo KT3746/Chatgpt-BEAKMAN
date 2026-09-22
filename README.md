@@ -11,6 +11,8 @@ Jogo de desafios de física no navegador com cinco fases. O objetivo é construi
 3. Pressione **Testar invenção** para iniciar a simulação.
 4. Complete cada fase usando poucas peças para conquistar três estrelas.
 
+Depois de cada tentativa, uma linha azul mantém a trajetória anterior na bancada. Use-a para comparar o efeito dos ajustes. O caderno de fases guarda o melhor tempo e a montagem com menos peças em cada desafio.
+
 ## Controles
 
 - Mouse ou toque: escolher uma peça, tocar e arrastar para instalar. Com nenhuma ferramenta escolhida, toque numa peça existente para editar.
@@ -32,7 +34,7 @@ Em telas de computador, a bancada e os controles se ajustam à altura disponíve
 
 ## Verificação
 
-Execute `node tests/game-check.mjs`. O teste usa a física real do jogo para verificar soluções de três estrelas nas cinco fases a 30, 60 e 120 quadros por segundo, devolução do orçamento, histórico de desfazer, controles de toque e pausa/retomada.
+Execute `node tests/game-check.mjs`. O teste usa a física real do jogo para verificar soluções de três estrelas nas cinco fases a 30, 60 e 120 quadros por segundo, recordes locais, trajetória anterior, devolução do orçamento, histórico de desfazer, controles de toque e pausa/retomada.
 
 ## Executar localmente
 

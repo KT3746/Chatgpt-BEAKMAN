@@ -4,7 +4,7 @@ import vm from 'node:vm';
 
 // Exercise the shipped game code, without duplicating its physics equations.
 const source = fs.readFileSync(new URL('../dist/game.js', import.meta.url), 'utf8');
-function game() {
+function game(savedProgress = null, storageWritable = true) {
   const elements = new Map();
   const documentListeners = new Map();
   let focusedId = null;
@@ -39,12 +39,19 @@ function game() {
   const moveButtons = ['left', 'up', 'down', 'right'].map(direction => {
     const button = get(`move-${direction}`); button.dataset.move = direction; return button;
   });
-  const ctx = new Proxy({}, { get: (_, name) => name.includes('Gradient')
-    ? () => ({ addColorStop() {} }) : name === 'measureText' ? () => ({ width: 90 }) : () => {} });
+  const ctx = new Proxy({}, {
+    get: (_, name) => name.includes('Gradient')
+      ? () => ({ addColorStop() {} }) : name === 'measureText' ? () => ({ width: 90 }) : () => {},
+    set: (target, name, value) => {
+      if (name === 'fillStyle' && value === undefined) throw new Error('Canvas fillStyle cannot be undefined');
+      target[name] = value; return true;
+    }
+  });
   const canvas = get('gameCanvas');
   Object.assign(canvas, { width: 960, height: 540, getContext: () => ctx,
     getBoundingClientRect: () => ({ left: 0, top: 0, width: 960, height: 540 }) });
   const storage = new Map();
+  if (savedProgress) storage.set('beakman-progress', JSON.stringify(savedProgress));
   let raf, clock = 0;
   const document = {
     activeElement: null, hidden: false, fullscreenElement: null, body: get('body'),
@@ -56,7 +63,10 @@ function game() {
   };
   const sandbox = {
     document, window: { matchMedia: () => ({ matches: false }), addEventListener() {} },
-    localStorage: { getItem: k => storage.get(k) ?? null, setItem: (k, v) => storage.set(k, v) },
+    localStorage: {
+      getItem: k => storage.get(k) ?? null,
+      setItem: (k, v) => { if (!storageWritable) throw new Error('storage unavailable'); storage.set(k, v); }
+    },
     performance: { now: () => clock }, requestAnimationFrame: fn => { raf = fn; },
     setTimeout() {}, console,
     Image: class { addEventListener() {} },
@@ -70,7 +80,9 @@ function game() {
         pieces.forEach(p => { placePart(p.type, p.x, p.y); placed.at(-1).angle = p.angle; });
       },
       state: () => ({mode, runTime, ball: {...ball}, placed: placed.map(p => ({...p})),
-        budget, inventory: {...inventory}, stars: [...progress.stars]}),
+        budget, inventory: {...inventory}, stars: [...progress.stars],
+        bestTimes: [...progress.bestTimes], bestPieces: [...progress.bestPieces],
+        attemptPath: attemptPath.map(point => ({...point}))}),
       select: id => { selectedId = id; selectedTool = null; updateUI(); },
     };
     loadLevel(0);`), sandbox);
@@ -100,6 +112,12 @@ const solutions = [
    { type: 'spring', x: 187.7, y: 448.1, angle: 0 }],
 ];
 
+const migrated = game({ stars: [3, 2, 1] }, false).state();
+assert.deepEqual(Array.from(migrated.stars), [3, 2, 1, 0, 0], 'Existing three-level progress must expand safely');
+assert.deepEqual(Array.from(migrated.bestTimes), [null, null, null, null, null]);
+assert.deepEqual(Array.from(migrated.bestPieces), [null, null, null, null, null]);
+console.log('Progress migration remains safe even when local storage is read-only: OK');
+
 for (const [index, pieces] of solutions.entries()) {
   const result = [];
   for (const fps of [30, 60, 120]) {
@@ -111,6 +129,8 @@ for (const [index, pieces] of solutions.entries()) {
     const state = g.state();
     assert.equal(state.mode, 'won', `Level ${index + 1} must be solvable at ${fps} fps`);
     assert.equal(state.stars[index], 3);
+    assert.equal(state.bestPieces[index], pieces.length);
+    assert.ok(Math.abs(state.bestTimes[index] - state.runTime) < .02);
     result.push(state.runTime);
   }
   assert.ok(Math.max(...result) - Math.min(...result) < .02, 'Frame rate must not change the solution');
@@ -185,12 +205,16 @@ const failure = game(); failure.startTest();
 for (let frame = 0; frame < 1800 && failure.state().mode === 'running'; frame++) failure.frame(1 / 60);
 assert.equal(failure.state().mode, 'failed');
 assert.equal(failure.get('hint').textContent, 'A carga caiu. Ajuste as peças e tente de novo.');
-console.log('Falling load reports the correct reason: OK');
+assert.ok(failure.state().attemptPath.length > 2, 'A failed attempt must leave a trajectory reference');
+console.log('Falling load reports the correct reason and preserves its trajectory: OK');
 
 const flow = game(); flow.configure(0, solutions[0]); flow.startTest();
 for (let frame = 0; frame < 1800 && flow.state().mode === 'running'; frame++) flow.frame(1 / 60);
 assert.equal(flow.state().mode, 'won');
 assert.equal(flow.get('resultCard').hidden, false);
+assert.match(flow.get('resultText').textContent, /Recorde inicial salvo/);
+assert.ok(flow.get('levelList').children.some(button => /melhor 6\.0 s · mínimo 2 peças/.test(button.innerHTML)),
+  'The level notebook must show the saved records');
 assert.equal(flow.focusedId(), 'nextLevelButton', 'Victory must focus the next action');
 flow.get('nextLevelButton').click();
 assert.equal(flow.state().mode, 'build');

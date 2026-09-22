@@ -170,6 +170,8 @@
   let keyboardCursor = { x: W / 2, y: H / 2 };
   let ballTrail = [];
   let trailClock = 0;
+  let attemptPath = [];
+  let pathClock = 0;
   let impactCooldown = 0;
   let screenShake = 0;
   let pointerInside = false;
@@ -191,13 +193,25 @@
           stars: Array.from({ length: levels.length }, (_, index) => {
             const value = Number(saved.stars[index]);
             return Number.isFinite(value) ? clamp(Math.round(value), 0, 3) : 0;
+          }),
+          bestTimes: Array.from({ length: levels.length }, (_, index) => {
+            const value = Number(saved.bestTimes?.[index]);
+            return Number.isFinite(value) && value > 0 ? Math.round(value * 100) / 100 : null;
+          }),
+          bestPieces: Array.from({ length: levels.length }, (_, index) => {
+            const value = Number(saved.bestPieces?.[index]);
+            return Number.isFinite(value) && value > 0 ? Math.round(value) : null;
           })
         };
-        if (!localStorage.getItem(progressKey)) localStorage.setItem(progressKey, JSON.stringify(normalized));
+        try { localStorage.setItem(progressKey, JSON.stringify(normalized)); } catch (_) { /* keep loaded progress in memory */ }
         return normalized;
       }
     } catch (_) { /* local progress is optional */ }
-    return { stars: Array(levels.length).fill(0) };
+    return {
+      stars: Array(levels.length).fill(0),
+      bestTimes: Array(levels.length).fill(null),
+      bestPieces: Array(levels.length).fill(null)
+    };
   }
 
   function saveProgress() {
@@ -227,6 +241,7 @@
     placed = [];
     particles = [];
     ballTrail = [];
+    attemptPath = [];
     selectedTool = null;
     selectedId = null;
     mode = "build";
@@ -315,7 +330,10 @@
       const button = document.createElement("button");
       button.className = `level-option${!unlocked ? " locked" : ""}${index === currentLevel ? " current" : ""}`;
       button.disabled = !unlocked;
-      button.innerHTML = `<span class="level-index">${String(index + 1).padStart(2, "0")}</span><span><strong>${level.title}</strong><small>${unlocked ? level.text : "Conclua a fase anterior"}</small></span><span class="level-score">${unlocked ? "★".repeat(progress.stars[index]) + "☆".repeat(3 - progress.stars[index]) : "🔒"}</span>`;
+      const record = progress.bestTimes[index] && progress.bestPieces[index]
+        ? `<small class="level-record">melhor ${progress.bestTimes[index].toFixed(1)} s · mínimo ${progress.bestPieces[index]} peça${progress.bestPieces[index] === 1 ? "" : "s"}</small>`
+        : "";
+      button.innerHTML = `<span class="level-index">${String(index + 1).padStart(2, "0")}</span><span><strong>${level.title}</strong><small>${unlocked ? level.text : "Conclua a fase anterior"}</small></span><span class="level-score">${unlocked ? `<span>${"★".repeat(progress.stars[index]) + "☆".repeat(3 - progress.stars[index])}</span>${record}` : "🔒"}</span>`;
       button.addEventListener("click", () => { els.levelDialog.close(); loadLevel(index); canvas.focus(); });
       els.levelList.appendChild(button);
     });
@@ -328,6 +346,8 @@
     particles = [];
     ballTrail = [];
     trailClock = 0;
+    attemptPath = [{ x: ball.x, y: ball.y }];
+    pathClock = 0;
     accumulator = 0;
     lastFrame = performance.now();
     selectedId = null;
@@ -340,6 +360,9 @@
 
   function stopTest(failed = false) {
     releaseDrag();
+    if (ball && attemptPath.length && Math.hypot(ball.x - attemptPath.at(-1).x, ball.y - attemptPath.at(-1).y) > 3) {
+      attemptPath.push({ x: ball.x, y: ball.y });
+    }
     mode = failed ? "failed" : "build";
     ball = makeBall();
     ballTrail = [];
@@ -353,13 +376,26 @@
     mode = "won";
     const par = levels[currentLevel].par;
     const score = usedCount() <= par ? 3 : usedCount() === par + 1 ? 2 : 1;
+    const previousTime = progress.bestTimes[currentLevel];
+    const previousPieces = progress.bestPieces[currentLevel];
+    const finishedTime = Math.round(runTime * 100) / 100;
+    const isFirstRecord = previousTime === null || previousPieces === null;
+    const timeRecord = previousTime === null || finishedTime < previousTime;
+    const piecesRecord = previousPieces === null || usedCount() < previousPieces;
     progress.stars[currentLevel] = Math.max(progress.stars[currentLevel] || 0, score);
+    if (timeRecord) progress.bestTimes[currentLevel] = finishedTime;
+    if (piecesRecord) progress.bestPieces[currentLevel] = usedCount();
     saveProgress();
     els.resultStars.textContent = "★".repeat(score) + "☆".repeat(3 - score);
     els.resultTitle.textContent = score === 3 ? "Engenharia de primeira!" : "Entrega concluída!";
-    els.resultText.textContent = score === 3
+    const recordText = isFirstRecord
+      ? " Recorde inicial salvo."
+      : timeRecord && piecesRecord ? " Novos recordes de tempo e economia."
+        : timeRecord ? " Novo recorde de tempo."
+          : piecesRecord ? " Novo recorde de economia." : "";
+    els.resultText.textContent = (score === 3
       ? `Você resolveu em ${runTime.toFixed(1)} s usando ${usedCount()} peça${usedCount() === 1 ? "" : "s"}. Projeto econômico e eficiente.`
-      : `Funcionou em ${runTime.toFixed(1)} s com ${usedCount()} peças. Tente usar ${par} ou menos para ganhar 3 estrelas.`;
+      : `Funcionou em ${runTime.toFixed(1)} s com ${usedCount()} peças. Tente usar ${par} ou menos para ganhar 3 estrelas.`) + recordText;
     els.nextLevelButton.textContent = currentLevel < levels.length - 1 ? "Próxima fase" : "Jogar novamente";
     els.resultCard.hidden = false;
     els.nextLevelButton.focus();
@@ -454,6 +490,7 @@
     selectedId = placed.some(item => item.id === snapshot.selectedId) ? snapshot.selectedId : null;
     selectedTool = null;
     particles = [];
+    attemptPath = [];
     ball = makeBall();
     mode = "build";
     tone(300, .06, "triangle", .02);
@@ -471,6 +508,7 @@
     selectedId = null;
     selectedTool = null;
     particles = [];
+    attemptPath = [];
     ball = makeBall();
     mode = "build";
     els.hint.textContent = "Bancada limpa. Desfazer recupera a montagem.";
@@ -736,6 +774,13 @@
     if (ball.x < ball.r) { ball.x = ball.r; ball.vx = Math.abs(ball.vx) * .5; }
     if (ball.x > W - ball.r) { ball.x = W - ball.r; ball.vx = -Math.abs(ball.vx) * .5; }
 
+    pathClock += dt;
+    if (pathClock >= .1) {
+      pathClock -= .1;
+      attemptPath.push({ x: ball.x, y: ball.y });
+      if (attemptPath.length > 320) attemptPath.shift();
+    }
+
     const goal = level.goal;
     if (Math.hypot(ball.x - goal.x, ball.y - goal.y) < 31) { winLevel(); return; }
     if (ball.y > H + 70 || runTime > 30) {
@@ -818,6 +863,7 @@
     if (!reducedMotion && screenShake > .05) ctx.translate((Math.random() - .5) * screenShake, (Math.random() - .5) * screenShake);
     drawBackground();
     drawLevel();
+    drawAttemptPath();
     drawBallTrail();
     placed.forEach(drawPart);
     if (selectedTool && canEdit() && pointerInside && !draggingId) drawPlacementPreview();
@@ -877,8 +923,11 @@
     tint.addColorStop(1, "rgba(2,9,15,.58)");
     ctx.fillStyle = tint; ctx.fillRect(0, 0, W, H);
 
-    const accents = ["rgba(255,170,61,.045)", "rgba(73,180,231,.055)", "rgba(255,89,60,.045)"];
-    ctx.fillStyle = accents[currentLevel]; ctx.fillRect(0, 0, W, H);
+    const accents = [
+      "rgba(255,170,61,.045)", "rgba(73,180,231,.055)", "rgba(255,89,60,.045)",
+      "rgba(88,224,178,.05)", "rgba(182,116,255,.045)"
+    ];
+    ctx.fillStyle = accents[currentLevel % accents.length]; ctx.fillRect(0, 0, W, H);
 
     ctx.strokeStyle = "rgba(139,204,227,.055)"; ctx.lineWidth = 1;
     for (let x = 0; x <= W; x += 60) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke(); }
@@ -1028,6 +1077,29 @@
     ctx.beginPath(); ctx.arc(0, 0, 42, 0, Math.PI * 2); ctx.stroke(); ctx.setLineDash([]);
     ctx.fillStyle = "#71f0c4"; ctx.font = "1000 23px system-ui"; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillText("✓", 0, 1);
     for (let i = 0; i < 4; i++) { ctx.save(); ctx.rotate(i * Math.PI / 2); ctx.fillStyle = "#ffcb31"; ctx.fillRect(-3, -49, 6, 9); ctx.restore(); }
+    ctx.restore();
+  }
+
+  function drawAttemptPath() {
+    if (attemptPath.length < 2 || mode === "running" || mode === "paused" || mode === "won") return;
+    ctx.save();
+    ctx.strokeStyle = "rgba(138,224,255,.62)";
+    ctx.lineWidth = 3;
+    ctx.setLineDash([7, 9]);
+    ctx.beginPath();
+    attemptPath.forEach((point, index) => index ? ctx.lineTo(point.x, point.y) : ctx.moveTo(point.x, point.y));
+    ctx.stroke();
+    ctx.setLineDash([]);
+    const end = attemptPath.at(-1);
+    ctx.fillStyle = "rgba(138,224,255,.88)";
+    ctx.beginPath(); ctx.arc(end.x, clamp(end.y, 8, H - 8), 5, 0, Math.PI * 2); ctx.fill();
+    ctx.font = "900 11px system-ui";
+    ctx.textAlign = "center";
+    const labelX = clamp(end.x, 62, W - 62), labelY = clamp(end.y - 20, 20, H - 16);
+    ctx.fillStyle = "rgba(3,11,19,.8)";
+    roundRect(labelX - 54, labelY - 14, 108, 22, 5); ctx.fill();
+    ctx.fillStyle = "#bdefff";
+    ctx.fillText("ÚLTIMO TESTE", labelX, labelY + 1);
     ctx.restore();
   }
 

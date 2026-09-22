@@ -282,7 +282,13 @@ canvas.placing { cursor: crosshair; }
 .level-index { display: grid; place-items: center; aspect-ratio: 1; border-radius: 8px; background: #203650; color: var(--yellow); font-weight: 1000; }
 .level-option strong { display: block; }
 .level-option small { display: block; color: var(--muted); margin-top: 2px; }
-.level-score { color: var(--yellow); white-space: nowrap; }
+.level-score { display: grid; justify-items: end; color: var(--yellow); white-space: nowrap; }
+.level-score .level-record { margin-top: 3px; color: #b9d8e8; font-size: .75rem; font-weight: 700; }
+
+@media (max-width: 480px) {
+  .level-option { grid-template-columns: 42px minmax(0, 1fr); }
+  .level-score { grid-column: 2; justify-items: start; }
+}
 
 @media (max-width: 780px) {
   .game-shell {
