@@ -63,6 +63,44 @@
         { x: 820, y: 385, text: "COLETOR" }
       ],
       par: 4
+    },
+    {
+      title: "O salto da torre",
+      text: "Cruze as duas alturas e entregue a carga no alto da torre.",
+      hint: "Combine impulso, vento e uma rampa para alcançar a plataforma final.",
+      budget: 170,
+      inventory: { plank: 2, spring: 2, fan: 2, magnet: 1 },
+      spawn: { x: 90, y: 428, vx: 64, vy: 0 },
+      goal: { x: 850, y: 217 },
+      platforms: [
+        [20, 470, 300, 470], [430, 400, 560, 400],
+        [700, 260, 940, 260], [700, 260, 700, 385]
+      ],
+      marks: [
+        { x: 145, y: 400, text: "LANÇAMENTO" },
+        { x: 492, y: 365, text: "APOIO" },
+        { x: 820, y: 180, text: "TORRE" }
+      ],
+      par: 4
+    },
+    {
+      title: "O reator de vento",
+      text: "Suba três níveis usando uma mola e correntes de ar bem direcionadas.",
+      hint: "Lance primeiro; depois use dois ventiladores inclinados para sustentar a subida.",
+      budget: 160,
+      inventory: { plank: 1, spring: 1, fan: 3, magnet: 1 },
+      spawn: { x: 90, y: 428, vx: 80, vy: 0 },
+      goal: { x: 850, y: 137 },
+      platforms: [
+        [20, 470, 270, 470], [390, 360, 550, 360],
+        [700, 180, 940, 180], [640, 180, 640, 330]
+      ],
+      marks: [
+        { x: 145, y: 400, text: "CÂMARA 1" },
+        { x: 470, y: 325, text: "CÂMARA 2" },
+        { x: 810, y: 100, text: "REATOR" }
+      ],
+      par: 3
     }
   ];
 
@@ -78,6 +116,7 @@
     playButton: document.getElementById("playButton"),
     playIcon: document.getElementById("playIcon"),
     playLabel: document.getElementById("playLabel"),
+    undoButton: document.getElementById("undoButton"),
     resetButton: document.getElementById("resetButton"),
     rotateButton: document.getElementById("rotateButton"),
     rotateBackButton: document.getElementById("rotateBackButton"),
@@ -123,6 +162,8 @@
   let runTime = 0;
   let lastFrame = performance.now();
   let nextId = 1;
+  let history = [];
+  let dragSnapshot = null;
   let progress = loadProgress();
   let particles = [];
   let audioCtx = null;
@@ -156,7 +197,7 @@
         return normalized;
       }
     } catch (_) { /* local progress is optional */ }
-    return { stars: [0, 0, 0] };
+    return { stars: Array(levels.length).fill(0) };
   }
 
   function saveProgress() {
@@ -192,8 +233,10 @@
     ball = makeBall();
     runTime = 0;
     accumulator = 0;
+    history = [];
+    dragSnapshot = null;
     els.resultCard.hidden = true;
-    els.levelNumber.textContent = String(currentLevel + 1).padStart(2, "0");
+    els.levelNumber.textContent = `${String(currentLevel + 1).padStart(2, "0")}/${String(levels.length).padStart(2, "0")}`;
     els.benchLabel.textContent = `BANCADA ${String(currentLevel + 1).padStart(2, "0")}`;
     els.missionTitle.textContent = level.title;
     els.missionText.textContent = level.text;
@@ -231,6 +274,8 @@
     els.rotateButton.disabled = !canEdit() || !selected || selected.type === "magnet";
     els.rotateBackButton.disabled = els.rotateButton.disabled;
     els.deleteButton.disabled = !canEdit() || !selected;
+    els.undoButton.disabled = !canEdit() || history.length === 0;
+    els.resetButton.disabled = !canEdit() || placed.length === 0;
     document.querySelectorAll("[data-move]").forEach(button => { button.disabled = !canEdit() || !selected; });
     updateSelectionInfo();
     els.budgetValue.textContent = `$ ${budget}`;
@@ -333,6 +378,7 @@
 
   function placePart(type, x, y) {
     if (!canEdit() || (inventory[type] ?? 0) <= 0 || budget < costs[type]) return;
+    pushHistory();
     const defaults = { plank: 0, spring: 0, fan: -Math.PI / 2, magnet: 0 };
     const item = { id: nextId++, type, x: clamp(x, 45, W - 45), y: clamp(y, 45, H - 45), angle: defaults[type], born: performance.now() };
     placed.push(item);
@@ -354,6 +400,7 @@
     if (!canEdit()) return;
     const index = placed.findIndex(item => item.id === selectedId);
     if (index < 0) return;
+    pushHistory();
     const [item] = placed.splice(index, 1);
     inventory[item.type]++;
     budget += costs[item.type];
@@ -376,12 +423,58 @@
       : selectedTool ? `${labels[selectedTool]}: toque e arraste` : "Toque numa peça para ajustar";
   }
 
-  function moveSelected(dx, dy) {
+  function moveSelected(dx, dy, remember = true) {
     if (!canEdit()) return;
     const item = placed.find(part => part.id === selectedId);
     if (!item) return;
+    if (remember) pushHistory();
     item.x = clamp(item.x + dx, 35, W - 35);
     item.y = clamp(item.y + dy, 35, H - 35);
+    updateUI();
+  }
+
+  function buildSnapshot() {
+    return {
+      placed: placed.map(item => ({ ...item })),
+      inventory: { ...inventory }, budget, selectedId
+    };
+  }
+
+  function pushHistory(snapshot = buildSnapshot()) {
+    history.push(snapshot);
+    if (history.length > 25) history.shift();
+  }
+
+  function undoBuild() {
+    if (!canEdit() || history.length === 0) return;
+    const snapshot = history.pop();
+    placed = snapshot.placed.map(item => ({ ...item }));
+    inventory = { ...snapshot.inventory };
+    budget = snapshot.budget;
+    selectedId = placed.some(item => item.id === snapshot.selectedId) ? snapshot.selectedId : null;
+    selectedTool = null;
+    particles = [];
+    ball = makeBall();
+    mode = "build";
+    tone(300, .06, "triangle", .02);
+    els.hint.textContent = "Última alteração desfeita.";
+    updateUI();
+  }
+
+  function resetBuild() {
+    if (!canEdit() || placed.length === 0) return;
+    pushHistory();
+    const level = levels[currentLevel];
+    inventory = { ...level.inventory };
+    budget = level.budget;
+    placed = [];
+    selectedId = null;
+    selectedTool = null;
+    particles = [];
+    ball = makeBall();
+    mode = "build";
+    els.hint.textContent = "Bancada limpa. Desfazer recupera a montagem.";
+    updateUI();
   }
 
   function distanceToSegment(px, py, x1, y1, x2, y2) {
@@ -429,6 +522,7 @@
       selectedId = hit.id;
       selectedTool = null;
       draggingId = hit.id;
+      dragSnapshot = { snapshot: buildSnapshot(), x: hit.x, y: hit.y };
       dragOffset = { x: hit.x - point.x, y: hit.y - point.y };
       updateUI();
       els.hint.textContent = "Peça selecionada — arraste, gire ou remova.";
@@ -447,14 +541,20 @@
     event.preventDefault();
     const item = placed.find(part => part.id === draggingId);
     if (item) {
+      if (dragSnapshot && (Math.abs(point.x + dragOffset.x - dragSnapshot.x) > 1 || Math.abs(point.y + dragOffset.y - dragSnapshot.y) > 1)) {
+        pushHistory(dragSnapshot.snapshot);
+        dragSnapshot = null;
+      }
       item.x = clamp(point.x + dragOffset.x, 35, W - 35);
       item.y = clamp(point.y + dragOffset.y, 35, H - 35);
+      updateUI();
     }
   });
   function releaseDrag(event) {
     if (event && event.pointerId !== activePointerId) return;
     const pointerId = activePointerId;
     draggingId = null;
+    dragSnapshot = null;
     activePointerId = null;
     if (pointerId !== null && canvas.hasPointerCapture?.(pointerId)) canvas.releasePointerCapture(pointerId);
     if (event?.pointerType === "touch") pointerInside = false;
@@ -468,7 +568,9 @@
   canvas.addEventListener("keydown", event => {
     if (!canEdit()) return;
     const directions = { ArrowLeft: [-16, 0], ArrowRight: [16, 0], ArrowUp: [0, -16], ArrowDown: [0, 16] };
-    if (directions[event.key]) {
+    if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "z") {
+      event.preventDefault(); undoBuild();
+    } else if (directions[event.key]) {
       event.preventDefault();
       const [dx, dy] = directions[event.key];
       const selected = placed.find(part => part.id === selectedId);
@@ -510,6 +612,7 @@
     if (!canEdit()) return;
     const item = placed.find(part => part.id === selectedId);
     if (!item || item.type === "magnet") return;
+    pushHistory();
     item.angle = Math.atan2(Math.sin(item.angle + direction * Math.PI / 12), Math.cos(item.angle + direction * Math.PI / 12));
     updateSelectionInfo();
     tone(360, .04, "square", .018);
@@ -521,6 +624,7 @@
     button.addEventListener("click", () => moveSelected(...directions[button.dataset.move]));
   });
   els.deleteButton.addEventListener("click", deleteSelected);
+  els.undoButton.addEventListener("click", undoBuild);
   els.playButton.addEventListener("click", () => {
     if (mode === "running") stopTest(false);
     else if (mode === "paused") {
@@ -532,7 +636,7 @@
     }
     else if (mode === "build" || mode === "failed") startTest();
   });
-  els.resetButton.addEventListener("click", () => loadLevel(currentLevel));
+  els.resetButton.addEventListener("click", resetBuild);
   function pauseTest() {
     releaseDrag();
     if (mode !== "running") return;

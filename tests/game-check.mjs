@@ -91,6 +91,13 @@ const solutions = [
    { type: 'fan', x: 289.88, y: 318.52, angle: deg(-15) },
    { type: 'magnet', x: 768.38, y: 118.27, angle: 0 },
    { type: 'magnet', x: 350.46, y: 170.88, angle: 0 }],
+  [{ type: 'fan', x: 326.19617609230505, y: 373.96472824949325, angle: 0 },
+   { type: 'fan', x: 123.49119551318145, y: 413.13890788925426, angle: deg(30) },
+   { type: 'spring', x: 164.12015424516596, y: 416.1893292402312, angle: deg(135) },
+   { type: 'plank', x: 530.9313396792037, y: 276.737220414184, angle: deg(165) }],
+  [{ type: 'fan', x: 715.5, y: 363.8, angle: deg(-15) },
+   { type: 'fan', x: 179.9, y: 382.6, angle: deg(-30) },
+   { type: 'spring', x: 187.7, y: 448.1, angle: 0 }],
 ];
 
 for (const [index, pieces] of solutions.entries()) {
@@ -150,6 +157,16 @@ mobile.get('rotateButton').click();
 assert.ok(Math.abs(mobile.state().placed[1].angle) < 1e-9);
 mobile.get('move-right').click();
 assert.equal(mobile.state().placed[1].x, 459);
+mobile.get('undoButton').click();
+assert.equal(mobile.state().placed[1].x, 455, 'Undo must restore a fine movement');
+mobile.get('deleteButton').click();
+assert.equal(mobile.state().placed.length, 1);
+mobile.get('undoButton').click();
+assert.equal(mobile.state().placed.length, 2, 'Undo must restore a removed piece');
+mobile.get('resetButton').click();
+assert.equal(mobile.state().placed.length, 0);
+mobile.get('undoButton').click();
+assert.equal(mobile.state().placed.length, 2, 'Undo must restore a cleared workbench');
 mobile.get('fullscreenButton').click();
 assert.ok(mobile.get('game-shell').classList.contains('expanded'), 'Enlargement must work without native fullscreen');
 assert.ok(mobile.get('fullscreenButton').classList.contains('active'));
@@ -162,7 +179,7 @@ mobile.get('helpButton').click();
 assert.equal(mobile.state().mode, 'paused', 'Help must pause the active attempt');
 mobile.get('card-plank').click();
 assert.equal(mobile.state().placed.length, 2, 'The paused attempt must not be editable');
-console.log('Mobile touch scaling, multitouch, placement, fine controls, and fullscreen fallback: OK');
+console.log('Mobile touch scaling, multitouch, placement, undo history, and fullscreen fallback: OK');
 
 const failure = game(); failure.startTest();
 for (let frame = 0; frame < 1800 && failure.state().mode === 'running'; frame++) failure.frame(1 / 60);

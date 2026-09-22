@@ -6,6 +6,7 @@
   <meta name="theme-color" content="#0b1628">
   <meta name="description" content="Beakman: construa invenções e resolva desafios de física com tábuas, molas, ventiladores e ímãs.">
   <title>Beakman</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23ffd235'/%3E%3Cpath d='M18 13h18q12 0 12 10 0 6-6 9 9 2 9 10 0 11-14 11H18zm11 9v7h7q4 0 4-4t-4-3zm0 15v8h8q5 0 5-4t-5-4z' fill='%230b1628'/%3E%3C/svg%3E">
   <link rel="preload" href="workshop-bg.webp" as="image" type="image/webp">
   <link rel="stylesheet" href="styles.css">
 </head>
@@ -21,9 +22,9 @@
       </div>
       <div class="top-stats">
         <button id="levelButton" class="level-chip" aria-label="Escolher fase">
-          <span>FASE</span><strong id="levelNumber">01</strong>
+          <span>FASE</span><strong id="levelNumber">01/05</strong>
         </button>
-        <div class="stars" id="totalStars" aria-label="Estrelas conquistadas">★ 0/9</div>
+        <div class="stars" id="totalStars" aria-label="Estrelas conquistadas">★ 0/15</div>
       </div>
     </header>
 
@@ -102,6 +103,7 @@
         <span id="statusText" aria-live="polite">MODO CONSTRUÇÃO</span>
       </div>
       <div class="control-actions">
+        <button id="undoButton" class="secondary-button" disabled>Desfazer</button>
         <button id="resetButton" class="secondary-button">Recomeçar</button>
         <button id="playButton" class="primary-button"><span id="playIcon">▶</span> <span id="playLabel">Testar invenção</span></button>
       </div>
@@ -128,10 +130,10 @@
     </div>
     <p id="helpText"></p>
     <p class="help-tip" id="helpHint"></p>
-    <p>Escolha uma peça, toque na bancada e arraste para posicionar. As setas ajustam a posição; ↶ e ↷ giram 15°.</p>
+    <p>Escolha uma peça, toque na bancada e arraste para posicionar. As setas ajustam a posição; ↶ e ↷ giram 15°. Desfazer recupera até 25 alterações.</p>
     <p>Toque novamente no cartão da peça para cancelar a ferramenta e selecionar uma peça instalada. × retira a peça e devolve seu custo.</p>
     <p id="helpPar"></p>
-    <p class="mobile-tip">Vire o celular de lado e use ⛶ para ampliar a bancada com os controles.</p>
+    <p class="mobile-tip">Vire o celular de lado e use o botão de ampliar para ver a bancada com os controles.</p>
   </dialog>
   </main>
 

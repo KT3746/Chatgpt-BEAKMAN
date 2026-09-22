@@ -2,7 +2,7 @@
 
 [Jogar Beakman](https://oficina-maluca.chat2026-utopia002.chatgpt.site)
 
-Jogo de desafios de física no navegador. O objetivo é construir soluções com tábuas, molas, ventiladores e ímãs para conduzir uma carga até o ponto de entrega.
+Jogo de desafios de física no navegador com cinco fases. O objetivo é construir soluções com tábuas, molas, ventiladores e ímãs para conduzir uma carga até o ponto de entrega.
 
 ## Como jogar
 
@@ -17,20 +17,22 @@ Jogo de desafios de física no navegador. O objetivo é construir soluções com
 - Setas da interface: ajustar a peça em passos de 4 unidades, sem esconder a posição com o dedo.
 - `↶` / `↷`: girar 15° em ambos os sentidos. O ângulo aparece acima dos controles.
 - `?`: ler o objetivo e a dica completos, inclusive com o celular de lado.
-- `⛶`: ampliar o jogo com os controles. Funciona mesmo em navegadores sem suporte a tela cheia.
+- Botão de ampliar: ocupar a tela com a bancada e os controles. Funciona mesmo em navegadores sem suporte a tela cheia.
+- **Desfazer**: recuperar até 25 posicionamentos, movimentos, giros, remoções ou uma bancada limpa por engano.
 - `1` a `4`: escolher uma peça.
 - Setas: mover a peça ou o cursor pelo teclado.
 - `R` / `Shift + R`: girar no sentido horário / anti-horário.
 - `Delete`: remover.
+- `Ctrl + Z` / `Cmd + Z`: desfazer.
 - `Esc`: cancelar a seleção.
 
-Ao trocar de aplicativo ou abrir uma ajuda, o teste pausa sem perder a construção ou a trajetória. Toque em **Retomar teste** para continuar. **Parar teste** conserva as peças; **Recomeçar** limpa a bancada.
+Ao trocar de aplicativo ou abrir uma ajuda, o teste pausa sem perder a construção ou a trajetória. Toque em **Retomar teste** para continuar. **Parar teste** conserva as peças; **Recomeçar** limpa a bancada e pode ser desfeito.
 
 Em telas de computador, a bancada e os controles se ajustam à altura disponível para que o botão de teste não fique abaixo da área visível.
 
 ## Verificação
 
-Execute `node tests/game-check.mjs`. O teste usa a física real do jogo para verificar soluções de três estrelas em todas as fases a 30, 60 e 120 quadros por segundo, devolução do orçamento e pausa/retomada.
+Execute `node tests/game-check.mjs`. O teste usa a física real do jogo para verificar soluções de três estrelas nas cinco fases a 30, 60 e 120 quadros por segundo, devolução do orçamento, histórico de desfazer, controles de toque e pausa/retomada.
 
 ## Executar localmente
 
